@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1f2937">
+<meta name="theme-color" content="#1f2937">es
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
 <title>Reportliste</title>
@@ -49,7 +49,7 @@ textarea{min-height:110px}
 .grid .sel{background:#16a34a}
 .grid .today{outline:1px solid #16a34a}
 .timebtn{width:100%;margin-top:8px;background:#374151;color:#fff;border:0;border-radius:8px;padding:11px}
-.hint{color:#9ca3af;font-size:12px;margin-top:10px}
+.hint{color:#9ca3af;font-size:12px;margin-top:10px}.warn{margin:8px 12px;padding:10px 12px;border-radius:10px;font-size:14px;background:#1f2937}.warn.bad{background:#7f1d1d}
 </style>
 </head>
 <body>
@@ -59,7 +59,7 @@ textarea{min-height:110px}
 <button class="btn grey" onclick="document.getElementById('imp').click()">Laden</button>
 <input type="file" id="imp" accept=".json" hidden onchange="importData(event)">
 </header>
-<div class="stats" id="stats"></div>
+<div class="warn" id="warn" style="display:none"></div><div class="stats" id="stats"></div>
 <div class="tools">
 <input id="q" placeholder="Suchen …" oninput="render()">
 <select id="f" onchange="render()"><option value="">Alle</option><option>Offen</option><option>Ja</option><option>Nein</option></select>
@@ -74,11 +74,11 @@ const QUELLEN=['Leads & Dates','Eigenes Netzwerk','Kundenempfehlungen','Yassin']
 const VERBLIEBEN=['','Verbindlicher Telefontermin','Rückruf vereinbart','Unterlagen geschickt','Kein Interesse'];
 let db=JSON.parse(localStorage.getItem('reportliste')||'[]');
 let cur=null, cal={y:0,m:0,sel:'',time:'',showTime:false};
-const save=()=>localStorage.setItem('reportliste',JSON.stringify(db));
+const save=()=>localStorage.setItem('reportliste',JSON.stringify(db));function warnBar(){const w=document.getElementById('warn');const lb=localStorage.getItem('lastBackup');if(!db.length){w.style.display='none';return}const days=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;if(lb===null||days>=3){w.className='warn bad';w.textContent=lb?'Achtung: seit '+days+' Tagen nicht gesichert. Tippe oben auf Sichern.':'Noch nie gesichert. Tippe oben auf Sichern.'}else{w.className='warn';w.textContent='Zuletzt gesichert: '+fmt(lb.slice(0,10))}w.style.display='block'}
 const fmt=d=>{if(!d)return'';const [y,m,t]=d.split('-');return t+'.'+m+'.'+y};
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-function render(){
+function render(){warnBar();
  const q=document.getElementById('q').value.toLowerCase(), f=document.getElementById('f').value;
  const n=s=>db.filter(x=>x.entscheidung===s).length;
  const gesamt=db.length, ja=n('Ja'), nein=n('Nein'), offen=db.filter(x=>!x.entscheidung||x.entscheidung==='Offen').length;
@@ -161,14 +161,14 @@ function del(){if(confirm('Eintrag wirklich löschen?')){db=db.filter(x=>x.id!==
 function exportData(){
  const a=document.createElement('a');
  a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}));
- a.download='reportliste-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+ a.download='reportliste-'+new Date().toISOString().slice(0,10)+'.json';a.click();localStorage.setItem('lastBackup',new Date().toISOString());warnBar();
 }
 function importData(e){
  const r=new FileReader();
  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)&&confirm('Aktuelle Daten durch die Sicherung ersetzen?')){db=d;save();render()}}catch(x){alert('Datei ungültig')}};
  r.readAsText(e.target.files[0]);
 }
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 render();
 </script>
 </body>
