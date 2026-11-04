@@ -1,0 +1,10 @@
+{
+  "name": "Reportliste",
+  "short_name": "Reportliste",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#1f2937",
+  "icons": []
+}
