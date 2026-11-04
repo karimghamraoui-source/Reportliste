@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2937">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Reportliste</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#111827;color:#f3f4f6}
+header{position:sticky;top:0;z-index:5;background:#1f2937;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;flex:1}
+button,select,input,textarea{font:inherit}
+.btn{background:#16a34a;color:#fff;border:0;border-radius:8px;padding:9px 12px}
+.btn.grey{background:#374151}
+.stats{display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap}
+.chip{background:#1f2937;border-radius:20px;padding:5px 10px;font-size:13px}
+.tools{padding:0 12px 8px;display:flex;gap:8px}
+.tools input,.tools select{flex:1;padding:9px;border-radius:8px;border:0;background:#1f2937;color:#fff}
+.list{padding:0 12px 90px}
+.card{background:#1f2937;border-radius:12px;padding:12px;margin-bottom:10px;border-left:8px solid #6b7280}
+.card.Ja{border-color:#16a34a}.card.Nein{border-color:#dc2626}.card.Offen{border-color:#9ca3af}
+.row1{display:flex;justify-content:space-between;gap:8px}
+.name{font-weight:600;font-size:17px}
+.sub{color:#9ca3af;font-size:13px;margin-top:4px}
+.badge{font-size:12px;border-radius:6px;padding:3px 8px;color:#fff;background:#6b7280;height:fit-content}
+.badge.Ja{background:#16a34a}.badge.Nein{background:#dc2626}
+.fab{position:fixed;right:16px;bottom:20px;width:58px;height:58px;border-radius:50%;background:#16a34a;color:#fff;font-size:32px;border:0;box-shadow:0 4px 14px #0008}
+.modal{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;justify-content:center;z-index:10}
+.modal.on{display:flex}
+.sheet{background:#1f2937;width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px}
+label{display:block;font-size:13px;color:#9ca3af;margin:12px 0 4px}
+.sheet input,.sheet select,.sheet textarea{width:100%;padding:11px;border-radius:8px;border:1px solid #374151;background:#111827;color:#fff}
+textarea{min-height:110px}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px}
+.check input{width:24px;height:24px}
+.acts{display:flex;gap:8px;margin-top:16px}
+.acts .btn{flex:1}
+.del{background:#dc2626}
+.cal{background:#111827;border-radius:12px;padding:10px;margin-top:6px}
+.calh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.calh button{background:#374151;color:#fff;border:0;border-radius:8px;padding:6px 12px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+.grid div{padding:9px 0;border-radius:8px;font-size:14px}
+.grid .wd{color:#9ca3af;font-size:12px;padding:3px 0}
+.grid .d{background:#1f2937}
+.grid .sel{background:#16a34a}
+.grid .today{outline:1px solid #16a34a}
+.timebtn{width:100%;margin-top:8px;background:#374151;color:#fff;border:0;border-radius:8px;padding:11px}
+.hint{color:#9ca3af;font-size:12px;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+<h1>Reportliste</h1>
+<button class="btn grey" onclick="exportData()">Sichern</button>
+<button class="btn grey" onclick="document.getElementById('imp').click()">Laden</button>
+<input type="file" id="imp" accept=".json" hidden onchange="importData(event)">
+</header>
+<div class="stats" id="stats"></div>
+<div class="tools">
+<input id="q" placeholder="Suchen …" oninput="render()">
+<select id="f" onchange="render()"><option value="">Alle</option><option>Offen</option><option>Ja</option><option>Nein</option></select>
+</div>
+<div class="list" id="list"></div>
+<button class="fab" onclick="openEdit(null)">+</button>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const QUELLEN=['Leads & Dates','Eigenes Netzwerk','Kundenempfehlungen','Yassin'];
+const VERBLIEBEN=['','Verbindlicher Telefontermin','Rückruf vereinbart','Unterlagen geschickt','Kein Interesse'];
+let db=JSON.parse(localStorage.getItem('reportliste')||'[]');
+let cur=null, cal={y:0,m:0,sel:'',time:'',showTime:false};
+const save=()=>localStorage.setItem('reportliste',JSON.stringify(db));
+const fmt=d=>{if(!d)return'';const [y,m,t]=d.split('-');return t+'.'+m+'.'+y};
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){
+ const q=document.getElementById('q').value.toLowerCase(), f=document.getElementById('f').value;
+ const n=s=>db.filter(x=>x.entscheidung===s).length;
+ const gesamt=db.length, ja=n('Ja'), nein=n('Nein'), offen=db.filter(x=>!x.entscheidung||x.entscheidung==='Offen').length;
+ const quote=(ja+nein)?Math.round(ja/(ja+nein)*100):0;
+ document.getElementById('stats').innerHTML=
+  `<span class="chip">Gesamt ${gesamt}</span><span class="chip">Ja ${ja}</span><span class="chip">Nein ${nein}</span><span class="chip">Offen ${offen}</span><span class="chip">Abschlussquote ${quote}%</span>`;
+ const rows=db.filter(x=>(!f||(x.entscheidung||'Offen')===f)&&(!q||JSON.stringify(x).toLowerCase().includes(q)))
+  .sort((a,b)=>(b.datum||'').localeCompare(a.datum||''));
+ document.getElementById('list').innerHTML=rows.map(x=>{
+  const e=x.entscheidung||'Offen';
+  return `<div class="card ${e}" onclick="openEdit('${x.id}')"><div class="row1"><div class="name">${esc(x.name)||'(ohne Namen)'}</div><div class="badge ${e}">${e}</div></div>
+  <div class="sub">${esc(x.quelle)}${x.datum?' · '+fmt(x.datum)+(x.uhrzeit?', '+x.uhrzeit+' Uhr':''):''}${x.stattgefunden?' · Termin war':''}</div>
+  ${x.verblieben?`<div class="sub">${esc(x.verblieben)}${x.dauer?' · '+esc(x.dauer):''}</div>`:''}
+  ${x.info?`<div class="sub">${esc(x.info).slice(0,90)}${x.info.length>90?'…':''}</div>`:''}</div>`}).join('')||'<p class="hint" style="padding:20px">Noch keine Einträge. Tippe unten auf das Plus.</p>';
+}
+
+function opts(arr,val){return arr.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}
+
+function openEdit(id){
+ cur=id?db.find(x=>x.id===id):{id:'',name:'',quelle:QUELLEN[0],datum:'',uhrzeit:'',stattgefunden:false,entscheidung:'Offen',verblieben:'',dauer:'',info:''};
+ document.getElementById('sheet').innerHTML=`
+ <label>Name</label><input id="e_name" value="${esc(cur.name)}">
+ <label>Quelle</label><select id="e_quelle">${opts(QUELLEN,cur.quelle)}</select>
+ <label>Datum Ersttermin</label><input id="e_datum" readonly onclick="openCal()" placeholder="Tippen zum Auswählen" value="${cur.datum?fmt(cur.datum)+(cur.uhrzeit?', '+cur.uhrzeit+' Uhr':''):''}">
+ <div id="calbox"></div>
+ <div class="check"><input type="checkbox" id="e_statt" ${cur.stattgefunden?'checked':''}><span>Termin stattgefunden</span></div>
+ <label>Entscheidung</label><select id="e_ent">${opts(['Offen','Ja','Nein'],cur.entscheidung)}</select>
+ <label>Wie nach dem Ersttermin verblieben</label><select id="e_verb">${opts(VERBLIEBEN,cur.verblieben)}</select>
+ <label>Zeit Ersttermin bis Entscheidung</label><input id="e_dauer" placeholder="z. B. 1 Woche" value="${esc(cur.dauer)}">
+ <label>Informationen, Gegenangebote, Gefühl beim Termin, Gründe</label><textarea id="e_info">${esc(cur.info)}</textarea>
+ <div class="acts"><button class="btn grey" onclick="closeM()">Abbrechen</button>${id?'<button class="btn del" onclick="del()">Löschen</button>':''}<button class="btn" onclick="commit()">Speichern</button></div>`;
+ cal={y:0,m:0,sel:cur.datum||'',time:cur.uhrzeit||'',showTime:false};
+ document.getElementById('modal').classList.add('on');
+}
+function closeM(){document.getElementById('modal').classList.remove('on')}
+
+function openCal(){
+ const base=cal.sel?new Date(cal.sel):new Date();
+ cal.y=base.getFullYear();cal.m=base.getMonth();drawCal();
+}
+function drawCal(){
+ const first=new Date(cal.y,cal.m,1), start=(first.getDay()+6)%7, days=new Date(cal.y,cal.m+1,0).getDate();
+ const names=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+ const today=new Date().toISOString().slice(0,10);
+ let h=`<div class="cal"><div class="calh"><button onclick="mv(-1)">‹</button><b>${names[cal.m]} ${cal.y}</b><button onclick="mv(1)">›</button></div><div class="grid">`;
+ ['Mo','Di','Mi','Do','Fr','Sa','So'].forEach(w=>h+=`<div class="wd">${w}</div>`);
+ for(let i=0;i<start;i++)h+='<div></div>';
+ for(let d=1;d<=days;d++){
+  const iso=`${cal.y}-${String(cal.m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  h+=`<div class="d ${iso===cal.sel?'sel':''} ${iso===today?'today':''}" onclick="pick('${iso}')">${d}</div>`;
+ }
+ h+='</div>';
+ h+=`<button class="timebtn" onclick="toggleTime()">${cal.time?'Uhrzeit: '+cal.time+' Uhr (ändern)':'Uhrzeit (optional)'}</button>`;
+ if(cal.showTime)h+=`<input type="time" id="tin" value="${cal.time}" style="width:100%;margin-top:8px;padding:11px;border-radius:8px;border:1px solid #374151;background:#111827;color:#fff" onchange="setTime(this.value)"><button class="timebtn" style="background:#6b7280" onclick="setTime('')">Uhrzeit entfernen</button>`;
+ h+=`<button class="timebtn" style="background:#16a34a" onclick="calDone()">Übernehmen</button></div>`;
+ document.getElementById('calbox').innerHTML=h;
+}
+function mv(d){cal.m+=d;if(cal.m<0){cal.m=11;cal.y--}if(cal.m>11){cal.m=0;cal.y++}drawCal()}
+function pick(iso){cal.sel=iso;drawCal()}
+function toggleTime(){cal.showTime=!cal.showTime;drawCal()}
+function setTime(v){cal.time=v;cal.showTime=false;drawCal()}
+function calDone(){
+ cur.datum=cal.sel;cur.uhrzeit=cal.time;
+ document.getElementById('e_datum').value=cur.datum?fmt(cur.datum)+(cur.uhrzeit?', '+cur.uhrzeit+' Uhr':''):'';
+ document.getElementById('calbox').innerHTML='';
+}
+function commit(){
+ cur.name=document.getElementById('e_name').value.trim();
+ cur.quelle=document.getElementById('e_quelle').value;
+ cur.stattgefunden=document.getElementById('e_statt').checked;
+ cur.entscheidung=document.getElementById('e_ent').value;
+ cur.verblieben=document.getElementById('e_verb').value;
+ cur.dauer=document.getElementById('e_dauer').value.trim();
+ cur.info=document.getElementById('e_info').value;
+ if(!cur.id){cur.id=String(Date.now());db.push(cur)}
+ else{const i=db.findIndex(x=>x.id===cur.id);db[i]=cur}
+ save();closeM();render();
+}
+function del(){if(confirm('Eintrag wirklich löschen?')){db=db.filter(x=>x.id!==cur.id);save();closeM();render()}}
+function exportData(){
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}));
+ a.download='reportliste-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+}
+function importData(e){
+ const r=new FileReader();
+ r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)&&confirm('Aktuelle Daten durch die Sicherung ersetzen?')){db=d;save();render()}}catch(x){alert('Datei ungültig')}};
+ r.readAsText(e.target.files[0]);
+}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+render();
+</script>
+</body>
+</html>
